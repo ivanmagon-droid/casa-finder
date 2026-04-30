@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Casa Finder BGY1 — Dashboard</title>
+<link rel="manifest" href="/dashboard/manifest.json" />
+<meta name="theme-color" content="#00d4ff" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="CasaFinder" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0a0e1a; --bg2: #111827; --bg3: #1e2a3a;
+    --border: #2d3f55; --accent: #00d4ff; --accent2: #0099bb;
+    --text: #e0e0e0; --muted: #a0b4c8; --faint: #4a5568;
+    --green: #10b981; --red: #ef4444; --yellow: #f59e0b; --blue: #3b82f6;
+    --font-mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: Arial, sans-serif; min-height: 100vh; }
+
+  /* HEADER */
+  header {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 12px 20px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 1000;
+  }
+  .logo { font-family: var(--font-mono); color: var(--accent); font-size: 18px; font-weight: bold; }
+  .logo span { color: var(--muted); font-size: 13px; font-weight: normal; margin-left: 10px; }
+  .header-right { display: flex; gap: 10px; align-items: center; }
+  .btn-refresh {
+    background: var(--accent); color: var(--bg); border: none; padding: 6px 14px;
+    border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;
+  }
+  .btn-refresh:hover { background: var(--accent2); }
+  #last-update { font-size: 11px; color: var(--faint); font-family: var(--font-mono); }
+
+  /* LAYOUT */
+  .main { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 53px); }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--bg2); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* STATS BAR */
+  .stats-bar {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+  }
+  .stat-box {
+    background: var(--bg3); border-radius: 6px; padding: 8px 6px;
+    text-align: center; border: 1px solid var(--border);
+  }
+  .stat-num { font-family: var(--font-mono); font-size: 18px; font-weight: bold; }
+  .stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+  .stat-box.tot .stat-num { color: var(--accent); }
+  .stat-box.nuovi .stat-num { color: var(--faint); }
+  .stat-box.pref .stat-num { color: var(--green); }
+  .stat-box.cont .stat-num { color: var(--yellow); }
+  .stat-box.prezzo .stat-num { color: #c084fc; }
+
+  /* FILTRI */
+  .filters {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .filters h3 { font-family: var(--font-mono); font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 2px; }
+  .filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .filter-group { display: flex; flex-direction: column; gap: 3px; }
+  .filter-group label { font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+  .filter-group input, .filter-group select {
+    background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 8px; border-radius: 5px; font-size: 12px; width: 100%;
+  }
+  .filter-group input:focus, .filter-group select:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .filter-row-full { display: flex; gap: 8px; }
+  .filter-row-full .filter-group { flex: 1; }
+  .btn-reset {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px; align-self: flex-end;
+  }
+  .btn-reset:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* EXPORT */
+  .export-bar {
+    padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 8px;
+  }
+  .btn-export {
+    background: var(--bg3); border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 11px;
+  }
+  .btn-export:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* CARDS LIST */
+  .cards-container { flex: 1; overflow-y: auto; padding: 10px; }
+  .cards-container::-webkit-scrollbar { width: 5px; }
+  .cards-container::-webkit-scrollbar-track { background: var(--bg); }
+  .cards-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .no-results {
+    text-align: center; color: var(--faint); padding: 40px 20px;
+    font-family: var(--font-mono); font-size: 13px;
+  }
+
+  /* CARD */
+  .card {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 10px; cursor: pointer; transition: border-color 0.2s;
+    overflow: hidden;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .card.stato-preferito { border-left: 3px solid var(--green); }
+  .card.stato-scartato { opacity: 0.45; border-left: 3px solid var(--red); }
+  .card.stato-contattato { border-left: 3px solid var(--yellow); }
+
+  .card-img { width: 100%; height: 120px; object-fit: cover; display: block; }
+  .card-img-placeholder {
+    width: 100%; height: 60px; background: var(--bg2);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--faint); font-size: 22px;
+  }
+  .card-body { padding: 10px 12px; }
+  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+  .card-title { font-size: 12px; font-weight: bold; color: var(--text); line-height: 1.3; flex: 1; margin-right: 6px; }
+  .badge {
+    font-size: 9px; padding: 2px 6px; border-radius: 3px;
+    font-family: var(--font-mono); text-transform: uppercase; white-space: nowrap; font-weight: bold;
+  }
+  .badge-nuovo { background: #374151; color: #9ca3af; }
+  .badge-visto { background: #1e3a5f; color: #60a5fa; }
+  .badge-contattato { background: #78350f; color: var(--yellow); }
+  .badge-preferito { background: #064e3b; color: var(--green); }
+  .badge-scartato { background: #450a0a; color: var(--red); }
+
+  .card-price { font-family: var(--font-mono); font-size: 18px; font-weight: bold; color: var(--accent); margin-bottom: 4px; }
+  .card-meta { font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-bottom: 8px; }
+  .card-source { font-size: 9px; color: var(--faint); }
+  .card-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+  .btn-sm {
+    font-size: 10px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border);
+    background: var(--bg2); color: var(--muted); cursor: pointer; transition: all 0.15s;
+  }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm.pref:hover { border-color: var(--green); color: var(--green); }
+  .btn-sm.scar:hover { border-color: var(--red); color: var(--red); }
+  .btn-sm.cont:hover { border-color: var(--yellow); color: var(--yellow); }
+  .btn-sm.open { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: bold; }
+  .btn-sm.open:hover { background: var(--accent2); }
+
+  /* NOTE */
+  .card-note {
+    display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+  }
+  .card-note textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 6px; border-radius: 4px; font-size: 11px;
+    resize: vertical; min-height: 50px;
+  }
+  .card-note textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* MAP PANEL */
+  .map-panel { display: flex; flex-direction: column; }
+  #map { flex: 1; }
+
+  /* POPUP */
+  .leaflet-popup-content-wrapper {
+    background: var(--bg2) !important; border: 1px solid var(--border) !important;
+    color: var(--text) !important; border-radius: 8px !important;
+  }
+  .leaflet-popup-tip { background: var(--bg2) !important; }
+  .popup-inner { font-family: Arial, sans-serif; min-width: 200px; }
+  .popup-title { font-weight: bold; font-size: 13px; margin-bottom: 4px; }
+  .popup-price { font-family: var(--font-mono); color: var(--accent); font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+  .popup-meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .popup-actions { display: flex; gap: 6px; }
+  .popup-btn {
+    font-size: 11px; padding: 4px 10px; border-radius: 4px; text-decoration: none;
+    font-weight: bold;
+  }
+  .popup-btn.primary { background: var(--accent); color: var(--bg); }
+  .popup-btn.fb { background: #1877f2; color: white; }
+
+  /* TOAST */
+  #toast {
+    position: fixed; bottom: 20px; right: 20px; background: var(--bg2);
+    border: 1px solid var(--accent); color: var(--text); padding: 10px 16px;
+    border-radius: 8px; font-size: 13px; z-index: 9999;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: auto 300px; }
+    .map-panel { order: -1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🏠 Casa Finder BGY1 <span>Cividate al Piano ±30km</span></div>
+  <div class="header-right">
+    <span id="last-update">—</span>
+    <button class="btn-refresh" onclick="loadData()">⟳ Aggiorna</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- STATS -->
+    <div class="stats-bar">
+      <div class="stat-box tot">
+        <div class="stat-num" id="stat-tot">0</div>
+        <div class="stat-label">Totale</div>
+      </div>
+      <div class="stat-box nuovi">
+        <div class="stat-num" id="stat-nuovi">0</div>
+        <div class="stat-label">Nuovi</div>
+      </div>
+      <div class="stat-box pref">
+        <div class="stat-num" id="stat-pref">0</div>
+        <div class="stat-label">Preferiti</div>
+      </div>
+      <div class="stat-box cont">
+        <div class="stat-num" id="stat-cont">0</div>
+        <div class="stat-label">Contattati</div>
+      </div>
+      <div class="stat-box prezzo">
+        <div class="stat-num" id="stat-avg">—</div>
+        <div class="stat-label">€ medio</div>
+      </div>
+    </div>
+
+    <!-- FILTRI -->
+    <div class="filters">
+      <h3>🔍 Filtri</h3>
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>Prezzo max (€)</label>
+          <input type="number" id="f-prezzo" value="720" min="0" max="1500" step="50" />
+        </div>
+        <div class="filter-group">
+          <label>Distanza max (km)</label>
+          <input type="number" id="f-dist" value="30" min="0" max="50" step="5" />
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>Stato</label>
+          <select id="f-stato">
+            <option value="">Tutti</option>
+            <option value="nuovo">Nuovo</option>
+            <option value="visto">Visto</option>
+            <option value="contattato">Contattato</option>
+            <option value="preferito">Preferito</option>
+            <option value="scartato">Scartato</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Sorgente</label>
+          <select id="f-source">
+            <option value="">Tutte</option>
+            <option value="immobiliare">Immobiliare.it</option>
+            <option value="subito">Subito.it</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-row-full">
+        <div class="filter-group">
+          <label>Comune</label>
+          <input type="text" id="f-comune" placeholder="es. Treviglio" />
+        </div>
+        <div class="filter-group">
+          <label>Locali min</label>
+          <select id="f-locali">
+            <option value="">Tutti</option>
+            <option value="1">1+</option>
+            <option value="2">2+</option>
+            <option value="3">3+</option>
+          </select>
+        </div>
+        <button class="btn-reset" onclick="resetFiltri()">Reset</button>
+      </div>
+      <div class="filter-group">
+        <label><input type="checkbox" id="f-arredato" style="margin-right:5px;">Solo arredati</label>
+        <label><input type="checkbox" id="f-nascondi-scartati" checked style="margin-right:5px;">Nascondi scartati</label>
+      </div>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="export-bar">
+      <button class="btn-export" onclick="exportCSV()">⬇ CSV</button>
+      <button class="btn-export" onclick="exportJSON()">⬇ JSON</button>
+      <span id="risultati-count" style="font-size:11px;color:var(--faint);margin-left:auto;align-self:center;font-family:var(--font-mono);">0 annunci</span>
+    </div>
+
+    <!-- CARDS -->
+    <div class="cards-container" id="cards-container">
+      <div class="no-results">
+        <div style="font-size:30px;margin-bottom:12px;">🔄</div>
+        Caricamento annunci...
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-panel">
+    <div id="map"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let allListings = [];
+let filteredListings = [];
+let markers = {};
+let map;
+let selectedId = null;
+
+// ─── MAP INIT ─────────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', { zoomControl: true }).setView([45.5947, 9.8367], 11);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CartoDB',
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(map);
+
+  // Cerchio centro
+  L.circle([45.5947, 9.8367], {
+    radius: 30000, color: '#00d4ff', fillColor: '#00d4ff',
+    fillOpacity: 0.04, weight: 1, dashArray: '4 4'
+  }).addTo(map);
+
+  // Marker centro (BGY1)
+  L.marker([45.5947, 9.8367], {
+    icon: L.divIcon({
+      className: '',
+      html: '<div style="background:#ff6b35;border:2px solid white;border-radius:50%;width:12px;height:12px;"></div>',
+      iconSize: [12, 12], iconAnchor: [6, 6]
+    })
+  }).addTo(map).bindPopup('<b style="color:#ff6b35;">BGY1 — Cividate al Piano</b>');
+}
+
+// ─── LOAD DATA ────────────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    // URL dati: webhook n8n sul Pi (via ngrok) oppure file locale come fallback
+    const DATA_URL = window.location.protocol === 'file:'
+      ? '../data/listings.json'
+      : 'https://nonautonomously-mustachioed-adelyn.ngrok-free.dev/webhook/listings';
+    const resp = await fetch(DATA_URL + '?t=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const raw = await resp.json();
+    allListings = mergeLocalState(raw);
+    document.getElementById('last-update').textContent =
+      'Aggiornato: ' + new Date().toLocaleTimeString('it-IT');
+    applyFilters();
+    toast('✅ Dati aggiornati — ' + allListings.length + ' annunci');
+  } catch (e) {
+    console.warn('Errore caricamento:', e);
+    // Prova con dati demo se il file non esiste
+    allListings = getDemoListings();
+    applyFilters();
+    toast('⚠ Nessun file dati — mostro demo');
+  }
+}
+
+// ─── LOCAL STATE (localStorage per stati e note) ──────────────────────────────
+function mergeLocalState(listings) {
+  return listings.map(l => {
+    const saved = getLocalListing(l.id);
+    return saved ? { ...l, stato: saved.stato || l.stato, note: saved.note || l.note } : l;
+  });
+}
+
+function getLocalListing(id) {
+  try { return JSON.parse(localStorage.getItem('cf_' + id)); }
+  catch { return null; }
+}
+
+function saveLocalListing(id, updates) {
+  const existing = getLocalListing(id) || {};
+  localStorage.setItem('cf_' + id, JSON.stringify({ ...existing, ...updates }));
+}
+
+// ─── FILTERS ──────────────────────────────────────────────────────────────────
+function applyFilters() {
+  const prezzoMax = +document.getElementById('f-prezzo').value || 9999;
+  const distMax = +document.getElementById('f-dist').value || 9999;
+  const stato = document.getElementById('f-stato').value;
+  const source = document.getElementById('f-source').value;
+  const comune = document.getElementById('f-comune').value.toLowerCase().trim();
+  const localiMin = +document.getElementById('f-locali').value || 0;
+  const soloArredati = document.getElementById('f-arredato').checked;
+  const nascondiScartati = document.getElementById('f-nascondi-scartati').checked;
+
+  filteredListings = allListings.filter(l => {
+    if (l.prezzo > prezzoMax) return false;
+    if ((l.distanza_km || 0) > distMax) return false;
+    if (stato && l.stato !== stato) return false;
+    if (nascondiScartati && l.stato === 'scartato') return false;
+    if (source && l.source !== source) return false;
+    if (comune && !(l.comune || '').toLowerCase().includes(comune)) return false;
+    if (localiMin && (l.locali || 0) < localiMin) return false;
+    if (soloArredati && !l.arredato) return false;
+    return true;
+  });
+
+  // Sort: preferiti prima, poi per data
+  filteredListings.sort((a, b) => {
+    const prio = { preferito: 0, contattato: 1, nuovo: 2, visto: 3, scartato: 4 };
+    if (prio[a.stato] !== prio[b.stato]) return prio[a.stato] - prio[b.stato];
+    return new Date(b.data_trovato || 0) - new Date(a.data_trovato || 0);
+  });
+
+  updateStats();
+  renderCards();
+  updateMarkers();
+  document.getElementById('risultati-count').textContent = filteredListings.length + ' annunci';
+}
+
+function resetFiltri() {
+  document.getElementById('f-prezzo').value = 720;
+  document.getElementById('f-dist').value = 30;
+  document.getElementById('f-stato').value = '';
+  document.getElementById('f-source').value = '';
+  document.getElementById('f-comune').value = '';
+  document.getElementById('f-locali').value = '';
+  document.getElementById('f-arredato').checked = false;
+  document.getElementById('f-nascondi-scartati').checked = true;
+  applyFilters();
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const tot = allListings.length;
+  const nuovi = allListings.filter(l => l.stato === 'nuovo').length;
+  const pref = allListings.filter(l => l.stato === 'preferito').length;
+  const cont = allListings.filter(l => l.stato === 'contattato').length;
+  const prezzi = allListings.filter(l => l.prezzo).map(l => l.prezzo);
+  const avg = prezzi.length ? Math.round(prezzi.reduce((a, b) => a + b, 0) / prezzi.length) : 0;
+
+  document.getElementById('stat-tot').textContent = tot;
+  document.getElementById('stat-nuovi').textContent = nuovi;
+  document.getElementById('stat-pref').textContent = pref;
+  document.getElementById('stat-cont').textContent = cont;
+  document.getElementById('stat-avg').textContent = avg ? avg + '€' : '—';
+}
+
+// ─── CARDS ────────────────────────────────────────────────────────────────────
+function renderCards() {
+  const container = document.getElementById('cards-container');
+  if (filteredListings.length === 0) {
+    container.innerHTML = `<div class="no-results"><div style="font-size:28px;margin-bottom:10px;">🔍</div>Nessun annuncio trovato<br><small style="color:var(--faint)">Modifica i filtri o aggiorna i dati</small></div>`;
+    return;
+  }
+  container.innerHTML = filteredListings.map(l => cardHTML(l)).join('');
+
+  // Attach note listeners
+  filteredListings.forEach(l => {
+    const ta = document.getElementById('note-' + l.id);
+    if (ta) {
+      ta.addEventListener('change', () => {
+        saveLocalListing(l.id, { note: ta.value });
+        l.note = ta.value;
+      });
+    }
+  });
+}
+
+function cardHTML(l) {
+  const imgHTML = l.foto && l.foto[0]
+    ? `<img class="card-img" src="${l.foto[0]}" alt="" onerror="this.style.display='none'" loading="lazy" />`
+    : `<div class="card-img-placeholder">🏠</div>`;
+
+  const badgeClass = 'badge-' + (l.stato || 'nuovo');
+  const cardClass = 'stato-' + (l.stato || 'nuovo');
+  const selClass = selectedId === l.id ? ' selected' : '';
+  const dist = l.distanza_km ? l.distanza_km.toFixed(1) + ' km' : 'N/D';
+  const sup = l.superficie_mq ? l.superficie_mq + ' m²' : 'N/D';
+  const loc = l.locali ? l.locali + ' loc.' : '';
+  const piano = l.piano ? ' · P.' + l.piano : '';
+  const arred = l.arredato ? ' · 🛋 Arred.' : '';
+  const sourceLabel = l.source === 'immobiliare' ? '🔵 Immobiliare.it' : (l.source === 'subito' ? '🟠 Subito.it' : l.source);
+  const noteVal = (l.note || '').replace(/"/g, '&quot;');
+  const noteDisplay = l.note ? 'block' : 'none';
+
+  return `
+  <div class="card ${cardClass}${selClass}" id="card-${l.id}" onclick="selectCard('${l.id}')">
+    ${imgHTML}
+    <div class="card-body">
+      <div class="card-header">
+        <div class="card-title">${escHtml(l.titolo || 'Annuncio')}</div>
+        <span class="badge ${badgeClass}">${l.stato || 'nuovo'}</span>
+      </div>
+      <div class="card-price">€${l.prezzo}/mese</div>
+      <div class="card-meta">📍 ${escHtml(l.comune || 'N/D')} · 🚗 ${dist} · 📐 ${sup}${loc ? ' · 🚪 ' + loc : ''}${piano}${arred}</div>
+      <div class="card-source">${sourceLabel} · ${l.data_pubblicazione || l.data_trovato?.slice(0,10) || ''}</div>
+      <div class="card-actions">
+        <button class="btn-sm open" onclick="event.stopPropagation(); window.open('${l.url}','_blank')">🔗 Apri</button>
+        <button class="btn-sm" onclick="event.stopPropagation(); window.open('${l.url_facebook}','_blank')">FB</button>
+        <button class="btn-sm pref" onclick="event.stopPropagation(); updateStato('${l.id}','preferito')">⭐</button>
+        <button class="btn-sm cont" onclick="event.stopPropagation(); updateStato('${l.id}','contattato')">📞</button>
+        <button class="btn-sm scar" onclick="event.stopPropagation(); updateStato('${l.id}','scartato')">✕</button>
+        <button class="btn-sm" onclick="event.stopPropagation(); toggleNote('${l.id}')">📝</button>
+      </div>
+      <div class="card-note" id="note-box-${l.id}" style="display:${noteDisplay}">
+        <textarea id="note-${l.id}" placeholder="Aggiungi note...">${noteVal}</textarea>
+      </div>
+    </div>
+  </div>`;
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function selectCard(id) {
+  // Segna come 'visto' se era 'nuovo'
+  const l = allListings.find(x => x.id === id);
+  if (l && l.stato === 'nuovo') {
+    l.stato = 'visto';
+    saveLocalListing(id, { stato: 'visto' });
+  }
+
+  selectedId = id;
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById('card-' + id);
+  if (card) card.classList.add('selected');
+
+  // Focus mappa
+  if (l && l.lat && markers[id]) {
+    map.setView([l.lat, l.lon], 14, { animate: true });
+    markers[id].openPopup();
+  }
+}
+
+function updateStato(id, stato) {
+  const l = allListings.find(x => x.id === id);
+  if (!l) return;
+  l.stato = stato;
+  saveLocalListing(id, { stato });
+  applyFilters();
+  toast('✅ Stato aggiornato: ' + stato);
+}
+
+function toggleNote(id) {
+  const box = document.getElementById('note-box-' + id);
+  if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+// ─── MARKERS ──────────────────────────────────────────────────────────────────
+function markerColor(l) {
+  const map = { preferito: '#10b981', scartato: '#ef4444', contattato: '#f59e0b', visto: '#3b82f6', nuovo: '#00d4ff' };
+  return map[l.stato] || '#00d4ff';
+}
+
+function updateMarkers() {
+  // Rimuovi vecchi
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+
+  filteredListings.forEach(l => {
+    if (!l.lat || !l.lon) return;
+    const color = markerColor(l);
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="background:${color};border:2px solid white;border-radius:50%;width:10px;height:10px;box-shadow:0 0 6px ${color};"></div>`,
+      iconSize: [10, 10], iconAnchor: [5, 5]
+    });
+    const dist = l.distanza_km ? l.distanza_km.toFixed(1) + ' km' : '';
+    const popup = `
+      <div class="popup-inner">
+        <div class="popup-title">${escHtml(l.titolo || 'Annuncio')}</div>
+        <div class="popup-price">€${l.prezzo}/mese</div>
+        <div class="popup-meta">📍 ${escHtml(l.comune || '')} · 🚗 ${dist}
+          ${l.superficie_mq ? ' · 📐 ' + l.superficie_mq + ' m²' : ''}
+        </div>
+        <div class="popup-actions">
+          <a href="${l.url}" target="_blank" class="popup-btn primary">Apri annuncio</a>
+          <a href="${l.url_facebook}" target="_blank" class="popup-btn fb">FB</a>
+        </div>
+      </div>`;
+    const marker = L.marker([l.lat, l.lon], { icon }).addTo(map).bindPopup(popup);
+    marker.on('click', () => {
+      selectCard(l.id);
+      const card = document.getElementById('card-' + l.id);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    markers[l.id] = marker;
+  });
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const headers = ['id','source','titolo','prezzo','comune','distanza_km','superficie_mq','locali','arredato','stato','url','data_trovato'];
+  const rows = filteredListings.map(l => headers.map(h => JSON.stringify(l[h] ?? '')).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  download('casa-finder-export.csv', 'text/csv', csv);
+}
+
+function exportJSON() {
+  download('casa-finder-export.json', 'application/json', JSON.stringify(filteredListings, null, 2));
+}
+
+function download(name, type, content) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name; a.click();
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ─── DEMO DATA ────────────────────────────────────────────────────────────────
+function getDemoListings() {
+  return [
+    { id:'demo_1', source:'immobiliare', titolo:'Bilocale luminoso Treviglio', prezzo:580, comune:'Treviglio',
+      lat:45.5210, lon:9.5935, distanza_km:22.1, superficie_mq:55, locali:2, piano:2, arredato:true,
+      url:'https://www.immobiliare.it', url_facebook:'https://facebook.com/marketplace',
+      foto:[], descrizione:'Bilocale ben tenuto, riscaldamento autonomo, parcheggio', stato:'nuovo',
+      note:'', data_trovato: new Date().toISOString(), data_pubblicazione: new Date().toISOString().slice(0,10) },
+    { id:'demo_2', source:'subito', titolo:'Monolocale Romano di Lombardia', prezzo:480, comune:'Romano di Lombardia',
+      lat:45.5196, lon:9.7485, distanza_km:8.4, superficie_mq:38, locali:1, piano:1, arredato:true,
+      url:'https://www.subito.it', url_facebook:'https://facebook.com/marketplace',
+      foto:[], descrizione:'Monolocale arredato, vicino al centro', stato:'nuovo',
+      note:'', data_trovato: new Date().toISOString(), data_pubblicazione: new Date().toISOString().slice(0,10) },
+    { id:'demo_3', source:'immobiliare', titolo:'Appartamento 2 locali Martinengo', prezzo:620, comune:'Martinengo',
+      lat:45.5714, lon:9.7668, distanza_km:5.2, superficie_mq:60, locali:2, piano:3, arredato:false,
+      url:'https://www.immobiliare.it', url_facebook:'https://facebook.com/marketplace',
+      foto:[], descrizione:'2 locali, terzo piano con ascensore, garage', stato:'nuovo',
+      note:'', data_trovato: new Date().toISOString(), data_pubblicazione: new Date().toISOString().slice(0,10) },
+  ];
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initMap();
+  loadData();
+
+  // Auto-refresh ogni 5 minuti
+  setInterval(loadData, 5 * 60 * 1000);
+
+  // Filtri realtime
+  ['f-prezzo','f-dist','f-stato','f-source','f-comune','f-locali'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', applyFilters);
+  });
+  ['f-arredato','f-nascondi-scartati'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', applyFilters);
+  });
+});
+</script>
+</body>
+</html>

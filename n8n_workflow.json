@@ -1,0 +1,104 @@
+{
+  "name": "Casa Finder BGY1 — Scraper Orario",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Ogni Ora",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd /PATH/TO/casa-finder && python scraper/run_scraper.py"
+      },
+      "id": "run-scraper",
+      "name": "Esegui Scraper",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json;\nlet result;\ntry {\n  const lines = (output.stdout || '').trim().split('\\n');\n  const lastLine = lines[lines.length - 1];\n  result = JSON.parse(lastLine);\n} catch(e) {\n  result = { nuovi: 0, totale: 0, annunci: [] };\n}\nreturn [{ json: result }];"
+      },
+      "id": "parse-output",
+      "name": "Parsa Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.nuovi }}", "operation": "larger", "value2": 0 }]
+        }
+      },
+      "id": "check-new",
+      "name": "Ci sono nuovi annunci?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst annunci = data.annunci || [];\n\nlet htmlCards = annunci.map(a => `\n  <div style=\"background:#1e2a3a;border:1px solid #2d3f55;border-radius:8px;padding:14px;margin-bottom:12px;\">\n    <strong style=\"color:#e0e0e0;\">${a.titolo || 'Annuncio'}</strong><br/>\n    <span style=\"color:#00d4ff;font-size:18px;font-weight:bold;\">€${a.prezzo}/mese</span><br/>\n    <span style=\"color:#a0b4c8;font-size:12px;\">📍 ${a.comune} · 🚗 ${(a.distanza_km||0).toFixed(1)} km · 📐 ${a.superficie_mq||'N/D'} m²</span><br/>\n    <a href=\"${a.url}\" style=\"background:#00d4ff;color:#0a0e1a;padding:5px 12px;border-radius:4px;text-decoration:none;font-size:12px;font-weight:bold;display:inline-block;margin-top:8px;\">🔗 Vedi annuncio</a>\n  </div>`).join('');\n\nconst html = `<!DOCTYPE html><html><body style=\"background:#0a0e1a;color:#e0e0e0;font-family:Arial,sans-serif;padding:20px;\">\n  <h2 style=\"color:#00d4ff;\">🏠 Casa Finder BGY1 — ${annunci.length} nuov${annunci.length===1?'o':'i'} annunci</h2>\n  ${htmlCards}\n  <p style=\"color:#4a5568;font-size:11px;margin-top:20px;\">Aggiornamento automatico ogni ora · Cividate al Piano ±30km</p>\n</body></html>`;\n\nreturn [{ json: { html, count: annunci.length, subject: `🏠 Casa Finder: ${annunci.length} nuov${annunci.length===1?'o':'i'} annunci` } }];"
+      },
+      "id": "build-email",
+      "name": "Crea Email HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.EMAIL_FROM }}",
+        "toEmail": "ivan.magon@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "id": "send-email",
+      "name": "Invia Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1340, 220],
+      "credentials": {
+        "smtp": { "id": "SMTP_CREDENTIAL_ID", "name": "Gmail SMTP" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "console.log('[Casa Finder] Nessun nuovo annuncio in questo ciclo.');\nreturn [];"
+      },
+      "id": "no-news",
+      "name": "Nessuna novità",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 400]
+    }
+  ],
+  "connections": {
+    "Ogni Ora": { "main": [[{ "node": "Esegui Scraper", "type": "main", "index": 0 }]] },
+    "Esegui Scraper": { "main": [[{ "node": "Parsa Output", "type": "main", "index": 0 }]] },
+    "Parsa Output": { "main": [[{ "node": "Ci sono nuovi annunci?", "type": "main", "index": 0 }]] },
+    "Ci sono nuovi annunci?": {
+      "main": [
+        [{ "node": "Crea Email HTML", "type": "main", "index": 0 }],
+        [{ "node": "Nessuna novità", "type": "main", "index": 0 }]
+      ]
+    },
+    "Crea Email HTML": { "main": [[{ "node": "Invia Email", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "meta": { "templateCredsSetupCompleted": false }
+}

@@ -1,0 +1,29 @@
+# Dati personali e secrets
+.env
+data/listings.json
+data/*.json
+logs/
+*.log
+
+# File Windows-specific
+start_n8n.bat
+start_scraper_api.bat
+setup_scheduler.ps1
+scraper_api.py
+run_scraper.bat
+casa-finder.zip
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# n8n local
+.n8n/
+
+# OS
+.DS_Store
+Thumbs.db
